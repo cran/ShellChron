@@ -5,18 +5,20 @@
 \title{Full ShellChron workflow wrapped in a single function}
 \usage{
 wrap_function(
-  path,
+  path = getwd(),
   file_name,
-  mineral = "calcite",
+  transfer_function = "KimONeil97",
   t_int = 1,
   T_per = 365,
-  d18Ow = "default",
+  d18Ow = 0,
   t_maxtemp = 182.5,
+  SCEUApar = c(1, 25, 10000, 5, 0.01, 0.01),
+  sinfit = TRUE,
   MC = 1000,
   plot = TRUE,
   plot_export = TRUE,
   export_raw = FALSE,
-  export_path
+  export_path = getwd()
 )
 }
 \arguments{
@@ -25,9 +27,8 @@ that contains the input data.}
 
 \item{file_name}{Name of the file that contains d18O data}
 
-\item{mineral}{String containing the name of the
-mineralogy (either \code{"calcite"} or \code{"aragonite"})
-Defaults to calcite.}
+\item{transfer_function}{String containing the name of the
+transfer function. Defaults to Kim and O'Neil, 1997.}
 
 \item{t_int}{Time interval (in days; default = 1)}
 
@@ -44,10 +45,16 @@ seasonality in d18Ow. Defaults to constant d18Ow of
 (in julian day; default = 182.5, or May 26th halfway
 through the year)}
 
+\item{SCEUApar}{Parameters for SCEUA optimization (iniflg, ngs, maxn, kstop
+pcento, peps) For details, refer to Duan et al. (1992) in references}
+
+\item{sinfit}{Apply sinusoidal fitting to guess initial parameters for SCEUA
+optimization? \code{TRUE/FALSE}}
+
 \item{MC}{Number of Monte Carlo simulations to apply for
 error propagation. Default = 1000}
 
-\item{plot}{Should an overview of the results of modelling
+\item{plot}{Should an overview of the results of modeling
 be plotted? \code{TRUE/FALSE}}
 
 \item{plot_export}{Should the overview plot be exported as
@@ -75,11 +82,13 @@ formulae.
 \donttest{example <- wrap_function(path = getwd(),
     file_name = system.file("extdata", "Virtual_shell.csv",
     package = "ShellChron"),
-    "calcite",
-    1,
-    365,
+    transfer_function = "KimONeil97",
+    t_int = 1,
+    T_per = 365,
     d18Ow = 0,
     t_maxtemp = 182.5,
+    SCEUApar = c(1, 25, 10000, 5, 0.01, 0.01),
+    sinfit = TRUE,
     MC = 1000,
     plot = FALSE,
     plot_export = FALSE,

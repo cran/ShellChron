@@ -1,19 +1,19 @@
 #' Function that propagates measurement uncertainty through model results
 #' 
 #' Function to propagate combined errors on \code{x} (= \code{Dsam}) and
-#' \code{y} (= \code{Osam}) on the modelled X (= \code{D}) and Y 
-#' \code{d18Oc} values by means of projection of uncertainties
-#' through the modelled \code{X-Y} relationship
+#' \code{y} (= \code{Osam}) on the modeled X (= \code{D}) and Y 
+#' (= \code{d18Oc}) values by means of projection of uncertainties
+#' through the modeled \code{X-Y} relationship
 #'
 #' Note: projection leads to large uncertainties on shallow parts of the
-#' \code{X-Y} curve
+#' \code{X–Y} curve
 #' @param x Vector of \code{x} values of input data
 #' @param x_err Vector of uncertainties on \code{x} values
 #' @param y Vector of \code{y} values of input data
 #' @param y_err Vector of uncertainties on \code{y} values
-#' @param X Vector of modelled \code{X} values on which the uncertainty is
+#' @param X Vector of modeled \code{X} values on which the uncertainty is
 #' to be projected
-#' @param Y Matrix of modelled x and \code{Y} values
+#' @param Y Matrix of modeled x and \code{Y} values
 #' @param MC Number of Monte Carlo simulations to apply for error propagation
 #' Default = 1000
 #' @return A vector listing the standard deviations of propagated errors 
@@ -30,7 +30,14 @@
 #' # Run function
 #' result <- mc_err_form(x, x_err, y, y_err, X, Y, 1000)
 #' @export
-mc_err_form <- function(x, x_err, y, y_err, X, Y, MC){
+mc_err_form <- function(x,
+    x_err,
+    y,
+    y_err,
+    X,
+    Y,
+    MC = 1000){
+    
     xmat <- matrix(rnorm(MC * length(x)), nrow = length(x)) * x_err + matrix(rep(x, MC), nrow = length(x)) # Create matrix of simulated X values
     Xpos <- apply(abs(outer(xmat, X, FUN = "-")), c(1,2), which.min) # find closest position in X vector (day) for each simulated X value
     Xpos_stat <- cbind(rowMeans(Xpos), apply(Xpos, 1, sd)) # Find mean and standard deviation of positions in X vector (day) for each sample

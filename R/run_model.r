@@ -8,9 +8,10 @@
 #' the optimal input parameters to the growth rate and Sea Surface
 #' Temperature (SST) sinusoids to simulate d18O data.
 #' @param dat Matrix containing the input data
-#' @param dynwindow Information on the position and length of modelling
+#' @param dynwindow Information on the position and length of modeling
 #' windows
-#' @param mineral Mineralogy of record (default = "calcite")
+#' @param transfer_function Transfer function used to convert d18Oc to temperature
+#' data.
 #' @param d18Ow Either a single value (constant d18Ow) or a vector of length
 #' equal to the period in SST data (365 days by default) containing information
 #' about seasonality in d18Ow. Defaults to constant d18Ow of 0 permille VSMOW
@@ -20,9 +21,13 @@
 #' @param t_int Time interval (in days; default = 1)
 #' @param t_maxtemp Timing of the warmest day of the year (in julian day; 
 #' default = 182.5, or May 26th halfway through the year)
+#' @param SCEUApar Parameters for SCEUA optimization (iniflg, ngs, maxn, kstop
+#' pcento, peps). For details, refer to Duan et al. (1992) in references
+#' @param sinfit Apply sinusoidal fitting to guess initial parameters for SCEUA
+#' optimization? \code{TRUE/FALSE}
 #' @param MC Number of Monte Carlo simulations to apply for error propagation
 #' Default = 1000
-#' @param plot Should results of modelling be plotted? \code{TRUE/FALSE}
+#' @param plot Should results of modeling be plotted? \code{TRUE/FALSE}
 #' @return A list containing the \code{resultarray} which contains the full
 #' result of all simulations on each data window and the \code{parmat} listing
 #' all optimized growth rate and SST parameters used to model d18O in each data
@@ -32,6 +37,8 @@
 #' resources research 28.4 (1992): 1015-1031. https://doi.org/10.1029/91WR02985
 #' @references package dependencies: ggplot2 3.2.1; rtop 0.5.14
 #' Function dependencies: sinreg, d18O_model, growth_model
+#' 
+#' \doi{10.1029/91WR02985}
 #' @examples
 #' # Create dummy input data column by column
 #' dat <- as.data.frame(seq(1000, 40000, 1000))
@@ -45,38 +52,42 @@
 #' colnames(dynwindow) <- "x"
 #' dynwindow$y <- rep(12, 15)
 #' # Run model function
-#' \donttest{resultlist <- run_model(dat,
-#'     dynwindow,
-#'     "calcite",
+#' \donttest{resultlist <- run_model(dat = dat,
+#'     dynwindow = dynwindow,
+#'     transfer_function = "KimONeil97",
 #'     d18Ow = 0,
 #'     T_per = 365,
 #'     G_per = 365,
 #'     t_int = 1,
 #'     t_maxtemp = 182.5,
+#'     SCEUApar = c(1, 25, 10000, 5, 0.01, 0.01),
+#'     sinfit = TRUE,
 #'     MC = 1000,
 #'     plot = FALSE)}
 #' @export
 run_model <- function(dat, # Core function to run the entire model on the data (dat)
     dynwindow, # The window vetor resulting from reading in the data 
-    mineral = "calcite",
-    d18Ow = "default",
-    T_per, # Temperature sinusoid parameters
-    G_per, # Growth sinusoid parameters
+    transfer_function = "KimONeil97",
+    d18Ow = 0,
+    T_per = 365, # Temperature sinusoid parameters
+    G_per = 365, # Growth sinusoid parameters
     t_int = 1, # Default time interval = 1 day
     t_maxtemp = 182.5, # Default time (day) at which maximum temperature is reached is 182.5 (exactly halfway through the year, or 1st of June)
+    SCEUApar = c(1, 25, 10000, 5, 0.01, 0.01), # Set parameters for SCEUA optimization (iniflg, ngs, maxn, kstop, pcento, peps)
+    sinfit = TRUE, # Apply sinusoidal fitting to guess initial parameters for SCEUA optimization? (TRUE/FALSE)
     MC = 1000, # If errors = TRUE, give the number of iterations for Monte Carlo simulation used in error propagation (default = 1000, if MC = 0 no eror propagation is done)
     plot = FALSE # Should the progress of model fitting be plotted?
     ){
 
     d18Oc <- d18Oc_err <- Omod <- NULL # Predefine variables to circumvent global variable binding error
 
-    # Prepare data arrays for storage of modelling results
-    resultarray <- array( # Create array to contain all modelling results of overlapping windows
+    # Prepare data arrays for storage of modeling results
+    resultarray <- array( # Create array to contain all modeling results of overlapping windows
         rep(as.matrix(cbind(dat, matrix(NA, ncol = length(dynwindow$x), nrow = length(dat$D)))), 9), # Replicate matrix of dat + extra columns to contain all variables
-        dim = c(length(dat$D), length(dynwindow$x) + length(dat[1,]), 9) # Six variables, being: Modelled d18O, residuals, Day of the Year, Growth between datapoints, Instantaneous growth rate at datapoint and Modelled temperature
+        dim = c(length(dat$D), length(dynwindow$x) + length(dat[1,]), 9) # Six variables, being: Modeled d18O, residuals, Day of the Year, Growth between datapoints, Instantaneous growth rate at datapoint and Modeled temperature
     )
 
-    parmat <- matrix(NA, nrow = 7, ncol = length(dynwindow$x)) # Matrix in which to store the modelling parameters
+    parmat <- matrix(NA, nrow = 7, ncol = length(dynwindow$x)) # Matrix in which to store the modeling parameters
     colnames(parmat) <- dynwindow$x
     rownames(parmat) <- c("T_amp", "T_pha", "T_av", "G_amp", "G_pha", "G_av", "G_skw")
     
@@ -97,17 +108,18 @@ run_model <- function(dat, # Core function to run the entire model on the data (
         plot(fitplot)
     }
 
-    # Estimate growth rate variability and round up to nearest multiple of 100 for conservative boundary
-    GRavmax <- ceiling(max(diff(dat[dat$YEARMARKER == 1,1])) / 365 / 100) * 100
+    # Estimate growth rate variability and round up to nearest higher magnitude of 10 for conservative boundary
+    GRavest <- max(diff(dat[dat$YEARMARKER == 1,1])) / 365 # Estimate maximum growth rate from yearmarkers
+    GRavmax <- 10 ^ (ceiling(log(GRavest, 10))) # Round up to nearest higher magnitude of 10
 
     # Find tailored range of temperatures from data
     d18Oc_range <- range(dat$d18Oc) # Find d18Oc range in data
-    if(mineral == "calcite"){ # Find temperature range (to be superseded with inverse d18O_model function in later updates)
+    if(transfer_function == "KimONeil97"){ # Find temperature range (to be superseded with inverse d18O_model function in later updates)
         T_range <- 18.03 * 1000 / (log((d18Oc_range - (0.97002 * rev(range(d18Ow)) - 29.98)) / 1000 + 1) * 1000 + 32.42) - 273.15 # Use Kim and O'Neil (1997) with conversion between VSMOW and VPDB by Brand et al. (2014)
-    }else if(mineral == "aragonite"){
+    }else if(transfer_function == "GrossmanKu86"){
         T_range <-  20.6 - 4.34 * (d18Oc_range - rev(range(d18Ow)) - 0.2) # Use Grossmann and Ku (1986) modified by Dettmann et al. (1999)
     }else{
-        print("ERROR: Supplied mineralogy is not recognized")
+        print("ERROR: Supplied transfer function is not recognized")
     }
     T_max <- max(T_range)
     T_amp_max <- 2 * abs(diff(T_range))
@@ -135,12 +147,12 @@ run_model <- function(dat, # Core function to run the entire model on the data (
     )
     
     # Set parameters for SCEUA optimization
-    iniflg = 1 # Flag for initial parameter array (1 = included)
-    ngs = 25 # Number of complexes (sub-populations)
-    maxn = 10000 # Maximum number of function evaluations allowed during optimization
-    kstop = 5 # Maximum number of evolution loops before convergency
-    pcento = 0.01 # Percentage change allowed in function value criterion before stop
-    peps = 0.01 # Convergence level for parameter set (difference between parameters required for stop)
+    iniflg = SCEUApar[1] # Flag for initial parameter array (default = 1; included)
+    ngs = SCEUApar[2] # Number of complexes (sub-populations, default = 25)
+    maxn = SCEUApar[3] # Maximum number of function evaluations allowed during optimization (default = 10000)
+    kstop = SCEUApar[4] # Maximum number of evolution loops before convergency (default = 5)
+    pcento = SCEUApar[5] # Percentage change allowed in function value criterion before stop (default = 0.01)
+    peps = SCEUApar[6] # Convergence level for parameter set (difference between parameters required for stop; default = 0.01)
 
     # Run the model on all windows
 
@@ -159,29 +171,35 @@ run_model <- function(dat, # Core function to run the entire model on the data (
             MC <- 0
         }
 
-        sinlist <- sinreg(Dsam, Osam) # Run sinusoidal regression to find initial parameter values
+        if(sinfit){ # If sinusoidal fitting is enabled
+            sinlist <- sinreg(Dsam, Osam) # Run sinusoidal regression to find initial parameter values
+            # Estimate starting parameters from regression results
+            O_av_start <- sinlist[[1]][1] # Export starting value for annual d18O average
+            O_amp_start <- sinlist[[1]][2] # Export starting value for d18O amplitude
+            O_pha_start <- sinlist[[1]][4] %% sinlist[[1]][3] # Estimate position (in depth of the first peak in d18O)
+            O_per_start <- sinlist[[1]][3] # Export starting value for period in distance domain
+        }else{
+            O_av_start <- mean(Osam) # Estimate starting value for annual d18O average by mean of d18O in record
+            O_amp_start <- diff(range(Osam)) / 2 # Estimate starting value for d18O amplitude by half the difference between minimum and maximum d18Oc
+            O_per_start <- diff(range(Dsam)) # Estimate starting period as thickness of isolated year
+            O_pha_start <- 0.25 * O_per_start # Set starting phase to one quarter of a cycle if it cannot be estimated from sinusoidal regression 
+        }
 
-        # Estimate starting parameters from regression results
-        O_av_start <- sinlist[[1]][1] # Export starting value for annual d18O average
-        O_amp_start <- sinlist[[1]][2] # Export starting value for d18O amplitude
-
-        if(mineral == "calcite"){
+        if(transfer_function == "KimONeil97"){
             T_av_start <- 18.03 * 1000 / (1000 * log((O_av_start - (0.97002 * mean(d18Ow) - 29.98)) / 1000 + 1) + 32.42) - 273.15  # Estimate mean temperature. Use Kim and O'Neil (1997) with conversion between VSMOW and VPDB by Brand et al. (2014)
             T_amp_start <- 18.03 * 1000 / (1000 * log((O_av_start - O_amp_start - (0.97002 * mean(d18Ow) - 29.98)) / 1000 + 1) + 32.42) - 273.15 - T_av_start # Estimate temperature amplitude. Use Kim and O'Neil (1997) with conversion between VSMOW and VPDB by Brand et al. (2014)
-        }else if(mineral == "aragonite"){
+        }else if(transfer_function == "GrossmanKu86"){
             T_av_start <- 20.6 - 4.34 * (O_av_start - mean(d18Ow) - 0.2) # Estimate mean temperature. Use Grossmann and Ku (1986) modified by Dettmann et al. (1999)
             T_amp_start <- 20.6 - 4.34 * (O_av_start - O_amp_start - mean(d18Ow) - 0.2) - T_av_start # Estimate mean temperature. Use Grossmann and Ku (1986) modified by Dettmann et al. (1999)
         }else{
-            print("ERROR: Supplied mineralogy is not recognized")
+            print("ERROR: Supplied transfer function is not recognized")
         }
 
-        O_pha_start <- sinlist[[1]][4] %% sinlist[[1]][3] # Estimate position (in depth of the first peak in d18O)
         O_peak <- O_pha_start + Dsam[1] # Find position of d18O peak in distance domain
-        O_per_start <- sinlist[[1]][3] # Export starting value for period in distance domain
         T_pha_start <- ((O_pha_start - 0.5 * O_per_start) %% O_per_start) / O_per_start * T_per # Estimate position of first peak in temperature (low in d18O) relative to annual cycle (days)
         G_av_start <- O_per_start / G_per # Estimate average growth rate in distance/day
 
-        years <- ceiling((diff(range(Dsam)) / O_per_start - 1) / 2) * 2 + 1 # Find next odd number to expand the number of simulated years to cover full window
+        years <- 3 # Set default number of years to 3
 
         # Collate starting parameters
         par0 <- c(
@@ -202,7 +220,7 @@ run_model <- function(dat, # Core function to run the entire model on the data (
                 G_per = G_per,
                 years = years,
                 t_int = t_int,
-                mineral = mineral,
+                transfer_function = transfer_function,
                 d18Ow = d18Ow,
                 Dsam = Dsam,
                 Osam = Osam,
@@ -222,7 +240,7 @@ run_model <- function(dat, # Core function to run the entire model on the data (
         par1 <- sceua_list[[1]] # Eport parameters of final model
         names(par1) <- names(par0)
 
-        result <- growth_model(par1, T_per, G_per, years, t_int, mineral, d18Ow, Dsam, Osam, t_maxtemp, plot = FALSE, MC, D_err, O_err, return = "result") # Calculate the end result of the best fit
+        result <- growth_model(par1, T_per, G_per, years, t_int, transfer_function, d18Ow, Dsam, Osam, t_maxtemp, plot = FALSE, MC, D_err, O_err, return = "result") # Calculate the end result of the best fit
         
         if(plot == TRUE){
             fitplot <- fitplot + # Add the new model fit to the plot to track progress of the model
@@ -239,7 +257,7 @@ run_model <- function(dat, # Core function to run the entire model on the data (
     dimnames(resultarray) <- list(
         paste("sample", 1:length(resultarray[, 1, 3])),
         c(colnames(dat), paste("window", 1:length(dynwindow$x))),
-        c("Modelled_d18O", "d18O_residuals", "Time_of_year", "Instantaneous_growth_rate", "Modelled temperature", "Modelled_d18O_SD", "Time_of_Year_SD", "Instantaneous_growth_rate_SD", "Modelled_temperature_SD")
+        c("Modeled_d18O", "d18O_residuals", "Time_of_year", "Instantaneous_growth_rate", "Modeled temperature", "Modeled_d18O_SD", "Time_of_Year_SD", "Instantaneous_growth_rate_SD", "Modeled_temperature_SD")
     )
 
     colnames(parmat) <- paste("window", 1:length(parmat[1,]))

@@ -10,7 +10,7 @@ growth_model(
   G_per = 365,
   years = 1,
   t_int = 1,
-  mineral = "calcite",
+  transfer_function = "KimONeil97",
   d18Ow = "default",
   Dsam,
   Osam,
@@ -30,11 +30,12 @@ growth_model(
 
 \item{G_per}{Period of growth rate sinusoid (in days; default = 365)}
 
-\item{years}{Number of years to be modelled (default = 1)}
+\item{years}{Number of years to be modeled (default = 1)}
 
 \item{t_int}{Time interval (in days; default = 1)}
 
-\item{mineral}{Mineralogy of record (default = "calcite")}
+\item{transfer_function}{Transfer function used to convert d18Oc to temperature
+data.}
 
 \item{d18Ow}{Either a single value (constant d18Ow) or a vector of length
 equal to the period in SST data (365 days by default) containing information
@@ -49,7 +50,7 @@ throughout model)}
 \item{t_maxtemp}{Timing of the warmest day of the year (in julian day;
 default = 182.5, or May 26th halfway through the year)}
 
-\item{plot}{Should results of modelling be plotted? \code{TRUE/FALSE}}
+\item{plot}{Should results of modeling be plotted? \code{TRUE/FALSE}}
 
 \item{MC}{Number of Monte Carlo simulations to apply for error propagation
 Default = 1000}
@@ -65,14 +66,14 @@ propagated uncertainties (if applicable)}
 \value{
 Depending on the value of the "return" parameter either a single
 value representing the Sum of Squared Residuals ("SSR") as a measure for
-the closeness of the match between modelled d18O and input values, or a
-matrix containing the full result of the modelling including propagated
+the closeness of the match between modeled d18O and input values, or a
+matrix containing the full result of the modeling including propagated
 uncertainties if applicable.
 }
 \description{
 The core function of the ShellChron growth model. Uses growth
 rate and SST (Sea Surface Temperature) sinusoids to model d18O
-data to be matched with the input. In the ShellChron modelling
+data to be matched with the input. In the ShellChron modeling
 routine, this function is optimized using the SCEUA algorithm
 and applied on sliding windows through the dataset to estimate
 the age of each datapoint
@@ -104,4 +105,6 @@ resmat <- growth_model(pars, T_per, G_per, Dsam = Dsam, Osam = Osam,
 package dependencies: ggplot2 3.2.1
 function dependencies: temperature_curve, d18O_model, growth_rate_curve,
 mc_err_orth
+
+\doi{10.1016/j.palaeo.2017.09.034}
 }

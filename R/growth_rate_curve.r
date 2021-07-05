@@ -7,7 +7,7 @@
 #' The skewness factor (\code{G_skw}) determines whether the sinusoid is skewed
 #' towards the front (\code{G_skw < 50}) or the back of the annual peak in
 #' growth rate (\code{G_skw > 50}).
-#' Used as intermediate step during iterative modelling.
+#' Used as intermediate step during iterative modeling.
 #' 
 #' @param G_par List of four parameters describing (in order) amplitude
 #' (\code{G_amp}; in micrometer/day), period (\code{G_per}; in days), phase
@@ -18,6 +18,8 @@
 #' @param t_int Time interval of sinusoidal record (in days)
 #' @return A matrix containing columns for time (in days) and GR
 #' (in micrometer/day)
+#' @references
+#'   \doi{10.1016/j.palaeo.2017.09.034}
 #' @examples
 #' # Set parameters
 #' G_amp <- 20

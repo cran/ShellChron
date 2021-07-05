@@ -29,7 +29,7 @@ interval. It then creates a skewed sinusoid based on the boundary conditions.
 The skewness factor (\code{G_skw}) determines whether the sinusoid is skewed
 towards the front (\code{G_skw < 50}) or the back of the annual peak in
 growth rate (\code{G_skw > 50}).
-Used as intermediate step during iterative modelling.
+Used as intermediate step during iterative modeling.
 }
 \examples{
 # Set parameters
@@ -41,4 +41,7 @@ G_skw <- 70
 G_par <- c(G_amp, G_per, G_pha, G_av, G_skw)
 # Run GR model function
 GR <- growth_rate_curve(G_par, 1, 1)
+}
+\references{
+\doi{10.1016/j.palaeo.2017.09.034}
 }

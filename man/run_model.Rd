@@ -7,12 +7,14 @@
 run_model(
   dat,
   dynwindow,
-  mineral = "calcite",
-  d18Ow = "default",
-  T_per,
-  G_per,
+  transfer_function = "KimONeil97",
+  d18Ow = 0,
+  T_per = 365,
+  G_per = 365,
   t_int = 1,
   t_maxtemp = 182.5,
+  SCEUApar = c(1, 25, 10000, 5, 0.01, 0.01),
+  sinfit = TRUE,
   MC = 1000,
   plot = FALSE
 )
@@ -20,10 +22,11 @@ run_model(
 \arguments{
 \item{dat}{Matrix containing the input data}
 
-\item{dynwindow}{Information on the position and length of modelling
+\item{dynwindow}{Information on the position and length of modeling
 windows}
 
-\item{mineral}{Mineralogy of record (default = "calcite")}
+\item{transfer_function}{Transfer function used to convert d18Oc to temperature
+data.}
 
 \item{d18Ow}{Either a single value (constant d18Ow) or a vector of length
 equal to the period in SST data (365 days by default) containing information
@@ -39,10 +42,16 @@ about seasonality in d18Ow. Defaults to constant d18Ow of 0 permille VSMOW
 \item{t_maxtemp}{Timing of the warmest day of the year (in julian day;
 default = 182.5, or May 26th halfway through the year)}
 
+\item{SCEUApar}{Parameters for SCEUA optimization (iniflg, ngs, maxn, kstop
+pcento, peps). For details, refer to Duan et al. (1992) in references}
+
+\item{sinfit}{Apply sinusoidal fitting to guess initial parameters for SCEUA
+optimization? \code{TRUE/FALSE}}
+
 \item{MC}{Number of Monte Carlo simulations to apply for error propagation
 Default = 1000}
 
-\item{plot}{Should results of modelling be plotted? \code{TRUE/FALSE}}
+\item{plot}{Should results of modeling be plotted? \code{TRUE/FALSE}}
 }
 \value{
 A list containing the \code{resultarray} which contains the full
@@ -72,20 +81,24 @@ dynwindow <- as.data.frame(seq(1, 29, 2))
 colnames(dynwindow) <- "x"
 dynwindow$y <- rep(12, 15)
 # Run model function
-\donttest{resultlist <- run_model(dat,
-    dynwindow,
-    "calcite",
+\donttest{resultlist <- run_model(dat = dat,
+    dynwindow = dynwindow,
+    transfer_function = "KimONeil97",
     d18Ow = 0,
     T_per = 365,
     G_per = 365,
     t_int = 1,
     t_maxtemp = 182.5,
+    SCEUApar = c(1, 25, 10000, 5, 0.01, 0.01),
+    sinfit = TRUE,
     MC = 1000,
     plot = FALSE)}
 }
 \references{
 package dependencies: ggplot2 3.2.1; rtop 0.5.14
 Function dependencies: sinreg, d18O_model, growth_model
+
+\doi{10.1029/91WR02985}
 }
 \seealso{
 Duan, Qingyun, Soroosh Sorooshian, and Vijai Gupta. "Effective and
